@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Polish with Me",
+    "slug": "mobile",
+    "version": "1.2.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/1ed9370f-1bcf-40e4-97d6-0597a36f8c76"
+    },
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#C8102E"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.polishwithme.app"
+    },
+    "android": {
+      "package": "com.polishwithme.app",
+      "versionCode": 9,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#C8102E"
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1ed9370f-1bcf-40e4-97d6-0597a36f8c76"
+      }
+    }
+  }
+}
