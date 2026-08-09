@@ -129,7 +129,9 @@ router.post("/ai-tutor", async (req, res) => {
           scenarioTitle,
           messages,
         }),
-        max_output_tokens: 260,
+        reasoning: { effort: "minimal" },
+        text: { verbosity: "low" },
+        max_output_tokens: 600,
       }),
     });
 
