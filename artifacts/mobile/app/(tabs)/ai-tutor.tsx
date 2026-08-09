@@ -222,7 +222,7 @@ export default function AiTutorScreen() {
         style={styles.topArea}
         contentContainerStyle={[
           styles.topContent,
-          { paddingTop: Platform.OS === "web" ? 67 + 16 : 16 },
+          { paddingTop: Platform.OS === "web" ? 67 + 14 : 14 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -246,7 +246,7 @@ export default function AiTutorScreen() {
         <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
           <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-            Type a short answer. The tutor will help with natural Polish, simple corrections and English explanations.
+            Type a short answer. The tutor replies in Polish with a simple English explanation.
           </Text>
         </View>
 
@@ -366,6 +366,8 @@ export default function AiTutorScreen() {
             value={input}
             onChangeText={setInput}
             multiline
+            textAlignVertical="top"
+            scrollEnabled={false}
             maxLength={500}
           />
           <Pressable
@@ -393,42 +395,42 @@ export default function AiTutorScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topArea: { flexGrow: 0, maxHeight: 330 },
-  topContent: { paddingHorizontal: 20, paddingBottom: 14 },
+  topArea: { flexGrow: 0, maxHeight: 255 },
+  topContent: { paddingHorizontal: 16, paddingBottom: 10 },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 10,
   },
   kicker: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1.3, marginBottom: 3 },
-  title: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
-  limitBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20 },
+  title: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  limitBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 20 },
   limitText: { fontSize: 13, fontFamily: "Inter_700Bold" },
-  infoCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, marginBottom: 14 },
-  infoText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
-  sectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, marginBottom: 8 },
-  levelRow: { flexDirection: "row", gap: 8, marginBottom: 6 },
-  levelChip: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
+  infoCard: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, borderRadius: 14, borderWidth: 1, marginBottom: 10 },
+  infoText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
+  sectionLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, marginBottom: 6 },
+  levelRow: { flexDirection: "row", gap: 7, marginBottom: 4 },
+  levelChip: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
   levelChipText: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  levelHelp: { fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 14 },
+  levelHelp: { fontSize: 11, fontFamily: "Inter_400Regular", marginBottom: 10 },
   scenarioList: { gap: 10, paddingRight: 20 },
-  scenarioCard: { width: 175, borderWidth: 1, borderRadius: 14, padding: 12, gap: 5 },
-  scenarioTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  scenarioDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  chatArea: { flex: 1, borderTopWidth: 1, paddingTop: 12 },
-  chatHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 4 },
+  scenarioCard: { width: 165, borderWidth: 1, borderRadius: 14, padding: 10, gap: 4 },
+  scenarioTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  scenarioDesc: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 15 },
+  chatArea: { flex: 1, borderTopWidth: 1, paddingTop: 10 },
+  chatHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, marginBottom: 4 },
   chatTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   resetText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  offlineText: { paddingHorizontal: 20, fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 8 },
-  messages: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 14, gap: 10 },
+  offlineText: { paddingHorizontal: 16, fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 8 },
+  messages: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 14, gap: 10 },
   messageRow: { flexDirection: "row" },
-  messageBubble: { maxWidth: "86%", borderRadius: 16, borderWidth: 1, padding: 12, gap: 6 },
+  messageBubble: { maxWidth: "94%", borderRadius: 16, borderWidth: 1, padding: 12, gap: 6 },
   messageMeta: { flexDirection: "row", alignItems: "center", gap: 5 },
   messageMetaText: { fontSize: 11, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 0.7 },
   messageText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 21 },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, marginHorizontal: 20, borderRadius: 16, borderWidth: 1, padding: 10 },
-  input: { flex: 1, minHeight: 38, maxHeight: 110, fontSize: 15, fontFamily: "Inter_400Regular", paddingHorizontal: 4, paddingVertical: 8 },
-  sendBtn: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, marginHorizontal: 16, borderRadius: 16, borderWidth: 1, padding: 10 },
+  input: { flex: 1, minHeight: 72, maxHeight: 150, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, paddingHorizontal: 4, paddingVertical: 8 },
+  sendBtn: { width: 46, height: 46, borderRadius: 13, alignItems: "center", justifyContent: "center" },
 });
