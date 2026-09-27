@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+export const privacyPolicyHtml = String.raw`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -37,11 +37,11 @@
 
   <h2>Optional AI Tutor and OpenAI</h2>
   <p>When you choose to use remote AI Tutor, your learner-entered message, recent conversation context, selected learning level, and scenario are sent through the Polish with Me backend. The backend sends relevant conversation content to OpenAI to generate a response. Do not include sensitive personal information in AI Tutor messages.</p>
-  <p>Local guided practice is generated on your device and is not sent to the AI Tutor API. Polish with Me does not claim zero retention for remotely processed AI content. See <a href="https://openai.com/policies/privacy-policy/">OpenAI's Privacy Policy</a>.</p>
+  <p>Local guided practice is generated on your device and is not sent to the AI Tutor API. Polish with Me does not claim that remotely processed AI content has zero retention; provider-controlled processing and retention are governed by applicable terms and settings. See <a href="https://openai.com/policies/privacy-policy/">OpenAI's Privacy Policy</a>.</p>
 
   <h2>Installation identifier and network information</h2>
   <p>The app creates a random installation identifier and sends it to the Polish with Me backend with remote AI Tutor requests. It is used for quotas, rate limiting, concurrency protection, security, and abuse prevention. It is not an account identity, login credential, or advertising identifier.</p>
-  <p>The backend processes network and IP information for rate limiting, security, service operation, and abuse prevention. It does not intentionally derive your location from that information.</p>
+  <p>The backend also processes network and IP information for rate limiting, security, service operation, and abuse prevention. The backend does not intentionally derive your location from that information.</p>
 
   <h2>Sentry crash reporting and diagnostics</h2>
   <p>Polish with Me uses Sentry for crash reporting, error monitoring, diagnostics, and app-health monitoring. Sentry may process crash or error information, privacy-minimised and sanitized stack traces, app version and build information, and device, operating-system, runtime, and diagnostic information.</p>
@@ -49,11 +49,11 @@
   <p>Sentry may process or display approximate geography derived from network or IP information. IP-address storage is disabled in the configured Sentry project, but this does not mean that an IP address is never processed in transit. See <a href="https://sentry.io/privacy/">Sentry's Privacy Policy</a>.</p>
 
   <h2>RevenueCat and Google Play purchases</h2>
-  <p>Google Play handles the purchase transaction and payment process. RevenueCat is used for purchase validation, Pro entitlement management, and Restore Purchases. RevenueCat may process an anonymous RevenueCat App User ID, device and app technical information, purchase token or receipt information, purchase history, and entitlement information. Polish with Me does not receive payment-card details.</p>
+  <p>Google Play handles the purchase transaction and payment process. RevenueCat is used for Google Play purchase validation, Pro entitlement management, and Restore Purchases. RevenueCat may process an anonymous RevenueCat App User ID, device and app technical information, Google Play purchase token or receipt information, purchase history, and entitlement information. Polish with Me does not receive payment-card details.</p>
   <p>See <a href="https://www.revenuecat.com/privacy/">RevenueCat's Privacy Policy</a> and <a href="https://policies.google.com/privacy">Google's Privacy Policy</a>.</p>
 
   <h2>Security, retention, and provider processing</h2>
-  <p>Application-controlled remote communications use HTTPS/TLS where verified. The current backend does not implement a permanent AI conversation database. OpenAI controls its processing under applicable API terms and settings. Sentry retains diagnostic events according to configured project settings. RevenueCat and Google Play retain purchase, entitlement, and transaction records under their applicable policies and legal obligations. These providers may process information internationally.</p>
+  <p>Application-controlled remote communications use HTTPS/TLS where verified. The current backend does not implement a permanent AI conversation database. OpenAI controls its processing under applicable API terms and settings. Sentry retains diagnostic events according to configured project settings. RevenueCat and Google Play retain purchase, entitlement, and transaction records under their applicable policies and legal obligations. These providers may process information internationally under their applicable terms.</p>
 
   <h2>Your choices and contact</h2>
   <ul>
@@ -69,4 +69,4 @@
   <footer>© 2026 Polish with Me. All rights reserved.</footer>
 </main>
 </body>
-</html>
+</html>`;

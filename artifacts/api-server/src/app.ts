@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { privacyPolicyHtml } from "./privacyPolicy";
 
 const app: Express = express();
 
@@ -26,6 +27,11 @@ app.use(
   }),
 );
 app.use(cors());
+
+app.get(["/privacy-policy", "/privacy-policy/"], (_req, res) => {
+  res.type("html").status(200).send(privacyPolicyHtml);
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
