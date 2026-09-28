@@ -1,18 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
-interface ProgressData {
-  completedLessons: string[];
-  quizScores: Record<string, number>;
-  streak: number;
-  lastStudyDate: string | null;
-  knownWords: string[];
-  totalXP: number;
-}
+import { finishQuizProgress, type ProgressData } from "@/lib/progressState";
+import { captureOperationalError } from "@/lib/observability";
 
 interface ProgressContextType extends ProgressData {
   completeLesson: (lessonId: string) => void;
   saveQuizScore: (lessonId: string, score: number) => void;
+  finishQuiz: (lessonId: string, score: number) => void;
   toggleKnownWord: (wordId: string) => void;
   isWordKnown: (wordId: string) => boolean;
   isLessonCompleted: (lessonId: string) => boolean;
@@ -41,12 +36,18 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
         if (raw) {
-          const parsed: ProgressData = JSON.parse(raw);
-          setData(parsed);
-          checkAndUpdateStreak(parsed);
+          try {
+            const parsed: ProgressData = JSON.parse(raw);
+            setData(parsed);
+            checkAndUpdateStreak(parsed);
+          } catch (error) {
+            captureOperationalError({ category: "STORAGE_PARSE_FAILURE", operation: "storage", storage: "progress", error });
+          }
         }
       })
-      .catch(() => {})
+      .catch((error) => {
+        captureOperationalError({ category: "STORAGE_READ_FAILURE", operation: "storage", storage: "progress", error });
+      })
       .finally(() => setLoaded(true));
   }, []);
 
@@ -60,13 +61,17 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     if (diff > 1) {
       const updated = { ...current, streak: 0 };
       setData(updated);
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((error) => {
+        captureOperationalError({ category: "STORAGE_WRITE_FAILURE", operation: "storage", storage: "progress", error });
+      });
     }
   };
 
   const save = useCallback((updated: ProgressData) => {
     setData(updated);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((error) => {
+      captureOperationalError({ category: "STORAGE_WRITE_FAILURE", operation: "storage", storage: "progress", error });
+    });
   }, []);
 
   const markStudied = useCallback(
@@ -123,6 +128,16 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     [markStudied, save]
   );
 
+  const finishQuiz = useCallback((lessonId: string, score: number) => {
+    setData((prev) => {
+      const updated = finishQuizProgress(prev, lessonId, score);
+      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((error) => {
+        captureOperationalError({ category: "STORAGE_WRITE_FAILURE", operation: "storage", storage: "progress", error });
+      });
+      return updated;
+    });
+  }, []);
+
   const toggleKnownWord = useCallback(
     (wordId: string) => {
       setData((prev) => {
@@ -173,6 +188,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
         ...data,
         completeLesson,
         saveQuizScore,
+        finishQuiz,
         toggleKnownWord,
         isWordKnown,
         isLessonCompleted,

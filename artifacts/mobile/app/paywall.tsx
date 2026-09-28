@@ -14,7 +14,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useSubscription } from "@/lib/revenuecat";
+import { hasProEntitlement, isPurchaseCancellation } from "@/lib/premiumEntitlement";
 import { useColors } from "@/hooks/useColors";
+import { captureBillingFailure } from "@/lib/observability";
 
 const PERKS = [
   { icon: "school-outline" as const, title: "A2 Elementary", desc: "Everyday conversations, past & future tense" },
@@ -30,22 +32,21 @@ export default function PaywallScreen() {
   const router = useRouter();
   const {
     offerings,
-    offeringsError,
     refreshOfferings,
     purchase,
     restore,
     isLoading,
     isPurchasing,
     isRestoring,
+    isBillingOperationActive,
   } = useSubscription();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [bottomBarHeight, setBottomBarHeight] = useState(0);
 
   const getPackage = (availableOfferings: typeof offerings) =>
-    availableOfferings?.current?.availablePackages[0] ??
-    availableOfferings?.all?.default?.availablePackages[0] ??
-    Object.values(availableOfferings?.all ?? {}).find(
-      (offering) => offering.availablePackages.length > 0,
-    )?.availablePackages[0];
+    availableOfferings?.all?.default?.availablePackages.find(
+      (purchasePackage) => purchasePackage.product.identifier === "pro_unlock",
+    );
 
   const packageToPurchase = getPackage(offerings);
   const price = packageToPurchase?.product.priceString;
@@ -53,9 +54,9 @@ export default function PaywallScreen() {
   const showStoreSetupError = () => {
     Alert.alert(
       "Purchase unavailable",
-      offeringsError
-        ? "Google Play could not load this purchase. Please check your internet connection and try again."
-        : 'The Google Play product "pro_unlock" is not available yet. Make sure it is active in Play Console and attached to the RevenueCat "default" offering.',
+      __DEV__
+        ? "Test purchase options are unavailable. Check the development purchase configuration and try again."
+        : "Purchase options are unavailable. Check your connection and try again.",
     );
   };
 
@@ -69,6 +70,7 @@ export default function PaywallScreen() {
     if (getPackage(result.data)) {
       setShowConfirm(true);
     } else {
+      if (!result.error) captureBillingFailure("BILLING_PACKAGE_MISSING");
       showStoreSetupError();
     }
   };
@@ -80,19 +82,40 @@ export default function PaywallScreen() {
       return;
     }
     try {
-      await purchase(packageToPurchase);
-      router.back();
-    } catch {
-      // User cancelled or purchase failed — stay on paywall
+      const customerInfo = await purchase(packageToPurchase);
+      if (hasProEntitlement(customerInfo)) {
+        router.back();
+        return;
+      }
+      Alert.alert(
+        "Purchase not activated",
+        "The purchase completed, but Pro access is not active yet. Please try Restore purchases or contact support.",
+      );
+    } catch (error) {
+      if (isPurchaseCancellation(error)) return;
+      Alert.alert(
+        "Purchase unsuccessful",
+        "The purchase could not be completed. Your access has not changed. Please try again.",
+      );
     }
   };
 
   const handleRestore = async () => {
     try {
-      await restore();
-      router.back();
+      const customerInfo = await restore();
+      if (hasProEntitlement(customerInfo)) {
+        router.back();
+        return;
+      }
+      Alert.alert(
+        "No Pro purchase found",
+        "No active Pro entitlement was found for this store account.",
+      );
     } catch {
-      // silently ignore
+      Alert.alert(
+        "Restore unsuccessful",
+        "Purchases could not be restored. Please check your connection and try again.",
+      );
     }
   };
 
@@ -101,7 +124,10 @@ export default function PaywallScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.container,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
+          {
+            paddingTop: insets.top + 20,
+            paddingBottom: Math.max(180, bottomBarHeight + 24),
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -109,9 +135,11 @@ export default function PaywallScreen() {
         <Pressable
           style={[styles.closeBtn, { backgroundColor: colors.secondary }]}
           onPress={() => router.back()}
-          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Close paywall"
+          accessibilityHint="Returns to the previous screen"
         >
-          <Ionicons name="close" size={20} color={colors.mutedForeground} />
+          <Ionicons accessible={false} name="close" size={20} color={colors.mutedForeground} />
         </Pressable>
 
         {/* Hero */}
@@ -119,7 +147,7 @@ export default function PaywallScreen() {
           <View style={[styles.heroIcon, { backgroundColor: "#C8102E15" }]}>
             <Text style={styles.heroEmoji}>🇵🇱</Text>
           </View>
-          <Text style={[styles.heroTitle, { color: colors.foreground }]}>
+          <Text accessibilityRole="header" style={[styles.heroTitle, { color: colors.foreground }]}>
             Unlock Full Curriculum
           </Text>
           <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
@@ -128,14 +156,19 @@ export default function PaywallScreen() {
         </View>
 
         {/* Price badge */}
-        <View style={[styles.priceBadge, { backgroundColor: "#C8102E" }]}>
+        <View
+          accessible
+          accessibilityLabel={price ? `One-time purchase, ${price}. No subscription or hidden fees.` : "One-time purchase price is loading"}
+          accessibilityLiveRegion="polite"
+          style={[styles.priceBadge, { backgroundColor: "#C8102E" }]}
+        >
           <Text style={styles.priceLabel}>One-time purchase</Text>
           <Text style={styles.priceAmount}>{price ?? "—"}</Text>
           <Text style={styles.priceNote}>No subscription. No hidden fees.</Text>
         </View>
 
         {/* What you unlock */}
-        <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
+        <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
           WHAT YOU UNLOCK
         </Text>
         <View style={[styles.perksCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -143,13 +176,13 @@ export default function PaywallScreen() {
             <View key={perk.title}>
               <View style={styles.perkRow}>
                 <View style={[styles.perkIconWrap, { backgroundColor: "#C8102E15" }]}>
-                  <Ionicons name={perk.icon} size={20} color="#C8102E" />
+                  <Ionicons accessible={false} name={perk.icon} size={20} color="#C8102E" />
                 </View>
                 <View style={styles.perkText}>
                   <Text style={[styles.perkTitle, { color: colors.foreground }]}>{perk.title}</Text>
                   <Text style={[styles.perkDesc, { color: colors.mutedForeground }]}>{perk.desc}</Text>
                 </View>
-                <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+                <Ionicons accessible={false} name="checkmark-circle" size={20} color="#34C759" />
               </View>
               {i < PERKS.length - 1 && (
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -160,7 +193,7 @@ export default function PaywallScreen() {
 
         {/* Always free */}
         <View style={[styles.freeCard, { backgroundColor: "#34C75910", borderColor: "#34C75930" }]}>
-          <Ionicons name="checkmark-circle" size={18} color="#34C759" />
+          <Ionicons accessible={false} name="checkmark-circle" size={18} color="#34C759" />
           <Text style={[styles.freeText, { color: colors.foreground }]}>
             A1 Absolute Beginner is always free — 18 lessons, 250+ words
           </Text>
@@ -169,6 +202,7 @@ export default function PaywallScreen() {
 
       {/* Fixed bottom CTA */}
       <View
+        onLayout={(event) => setBottomBarHeight(event.nativeEvent.layout.height)}
         style={[
           styles.bottomBar,
           {
@@ -183,17 +217,23 @@ export default function PaywallScreen() {
             styles.ctaBtn,
             {
               backgroundColor: "#C8102E",
-              opacity: pressed || isPurchasing || isLoading ? 0.85 : 1,
+              opacity: pressed || isBillingOperationActive || isLoading ? 0.85 : 1,
             },
           ]}
           onPress={handleUnlockPress}
-          disabled={isPurchasing || isLoading}
+          disabled={isBillingOperationActive || isLoading}
+          accessibilityRole="button"
+          accessibilityLabel={price ? `Unlock Pro for ${price}` : "Load purchase options"}
+          accessibilityState={{
+            disabled: isBillingOperationActive || isLoading,
+            busy: isPurchasing || isLoading,
+          }}
         >
           {isPurchasing || isLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="lock-open-outline" size={20} color="#fff" />
+              <Ionicons accessible={false} name="lock-open-outline" size={20} color="#fff" />
               <Text style={styles.ctaText}>
                 {price ? `Unlock for ${price}` : "Load purchase options"}
               </Text>
@@ -204,7 +244,10 @@ export default function PaywallScreen() {
         <Pressable
           style={styles.restoreBtn}
           onPress={handleRestore}
-          disabled={isRestoring}
+          disabled={isBillingOperationActive}
+          accessibilityRole="button"
+          accessibilityLabel="Restore previous purchase"
+          accessibilityState={{ disabled: isBillingOperationActive, busy: isRestoring }}
         >
           {isRestoring ? (
             <ActivityIndicator color={colors.mutedForeground} size="small" />
@@ -213,6 +256,15 @@ export default function PaywallScreen() {
               Restore previous purchase
             </Text>
           )}
+        </Pressable>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Privacy Policy"
+          accessibilityHint="Opens the in-app Privacy Policy"
+          onPress={() => router.push("/privacy-policy")}
+          style={styles.privacyLink}
+        >
+          <Text style={[styles.privacyLinkText, { color: colors.mutedForeground }]}>Privacy Policy</Text>
         </Pressable>
       </View>
 
@@ -224,33 +276,52 @@ export default function PaywallScreen() {
         onRequestClose={() => setShowConfirm(false)}
       >
         <Pressable
+          accessible={false}
           style={styles.modalOverlay}
           onPress={() => setShowConfirm(false)}
         >
           <Pressable
+            accessible={false}
+            accessibilityViewIsModal
             style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {}}
           >
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              Confirm Purchase
-            </Text>
-            <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
-              Unlock the full "Polish with Me" curriculum for {price ?? "the displayed price"}. This is a one-time payment — you'll have access forever.
-            </Text>
-            <View style={styles.modalBtns}>
-              <Pressable
-                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
-                onPress={() => setShowConfirm(false)}
-              >
-                <Text style={[styles.modalCancelText, { color: colors.foreground }]}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalConfirmBtn, { backgroundColor: "#C8102E" }]}
-                onPress={handlePurchase}
-              >
-                <Text style={styles.modalConfirmText}>Pay {price ?? ""}</Text>
-              </Pressable>
-            </View>
+            <ScrollView
+              contentContainerStyle={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text accessibilityRole="header" style={[styles.modalTitle, { color: colors.foreground }]}>
+                Confirm Purchase
+              </Text>
+              <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
+                Unlock the full "Polish with Me" curriculum for {price ?? "the displayed price"}. This is a one-time payment — you'll have access forever.
+              </Text>
+              <View style={styles.modalBtns}>
+                <Pressable
+                  style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+                  onPress={() => setShowConfirm(false)}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.modalCancelText, { color: colors.foreground }]}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.modalConfirmBtn,
+                    {
+                      backgroundColor: "#C8102E",
+                      opacity: isBillingOperationActive ? 0.85 : 1,
+                    },
+                  ]}
+                  onPress={handlePurchase}
+                  disabled={isBillingOperationActive}
+                  accessibilityRole="button"
+                  accessibilityLabel={price ? `Confirm payment of ${price}` : "Confirm payment"}
+                  accessibilityState={{ disabled: isBillingOperationActive, busy: isPurchasing }}
+                >
+                  <Text style={styles.modalConfirmText}>Pay {price ?? ""}</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -263,9 +334,9 @@ const styles = StyleSheet.create({
   container: { paddingHorizontal: 20 },
   closeBtn: {
     alignSelf: "flex-end",
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
@@ -370,9 +441,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 8,
   },
-  ctaText: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
-  restoreBtn: { alignItems: "center", paddingVertical: 8 },
+  ctaText: {
+    flexShrink: 1,
+    color: "#fff",
+    fontSize: 17,
+    fontFamily: "Inter_700Bold",
+    textAlign: "center",
+  },
+  restoreBtn: { minHeight: 48, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   restoreText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  privacyLink: { minHeight: 48, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
+  privacyLinkText: { fontSize: 13, lineHeight: 19, fontFamily: "Inter_500Medium", textDecorationLine: "underline", textAlign: "center" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -382,26 +461,32 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: "100%",
+    maxHeight: "90%",
     borderRadius: 20,
     padding: 24,
     borderWidth: 1,
   },
+  modalContent: { flexGrow: 1 },
   modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold", marginBottom: 10 },
   modalBody: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20, marginBottom: 20 },
-  modalBtns: { flexDirection: "row", gap: 10 },
+  modalBtns: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   modalCancelBtn: {
     flex: 1,
+    flexBasis: 120,
     borderWidth: 1,
     borderRadius: 12,
+    minHeight: 48,
     paddingVertical: 13,
     alignItems: "center",
   },
-  modalCancelText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  modalCancelText: { flexShrink: 1, fontSize: 15, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   modalConfirmBtn: {
     flex: 1,
+    flexBasis: 120,
     borderRadius: 12,
+    minHeight: 48,
     paddingVertical: 13,
     alignItems: "center",
   },
-  modalConfirmText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  modalConfirmText: { flexShrink: 1, color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold", textAlign: "center" },
 });

@@ -14,7 +14,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   const colors = useColors();
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>
+      <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>
       {children}
     </View>
   );
@@ -54,11 +54,17 @@ export default function PrivacyPolicyScreen() {
             },
           ]}
         >
-          <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.foreground} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            accessibilityHint="Returns to the previous screen"
+            onPress={() => router.back()}
+            style={styles.backBtn}
+          >
+            <Ionicons accessible={false} name="chevron-back" size={24} color={colors.foreground} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Privacy Policy</Text>
-          <View style={styles.backBtn} />
+          <Text accessibilityRole="header" style={[styles.headerTitle, { color: colors.foreground }]}>Privacy Policy</Text>
+          <View accessible={false} style={styles.backBtn} />
         </View>
       )}
 
@@ -73,7 +79,7 @@ export default function PrivacyPolicyScreen() {
         showsVerticalScrollIndicator={false}
       >
         {!canGoBack && (
-          <Text style={[styles.pageTitle, { color: colors.foreground }]}>Privacy Policy</Text>
+          <Text accessibilityRole="header" style={[styles.pageTitle, { color: colors.foreground }]}>Privacy Policy</Text>
         )}
 
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
@@ -248,8 +254,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: { width: 36 },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  backBtn: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
+  headerTitle: { flex: 1, fontSize: 17, lineHeight: 23, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   container: { paddingHorizontal: 24 },
   pageTitle: { fontSize: 28, fontFamily: "Inter_700Bold", marginBottom: 6 },
   meta: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 20 },

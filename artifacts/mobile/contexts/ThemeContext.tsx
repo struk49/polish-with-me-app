@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { useColorScheme } from "react-native";
+import { captureOperationalError } from "@/lib/observability";
 
 export type ThemePref = "light" | "dark" | "system";
 export type ResolvedScheme = "light" | "dark";
@@ -36,13 +37,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           setPrefState(raw);
         }
       })
-      .catch(() => {})
+      .catch((error) => {
+        captureOperationalError({ category: "STORAGE_READ_FAILURE", operation: "storage", storage: "theme", error });
+      })
       .finally(() => setLoaded(true));
   }, []);
 
   const setPref = useCallback((next: ThemePref) => {
     setPrefState(next);
-    AsyncStorage.setItem(STORAGE_KEY, next).catch(() => {});
+    AsyncStorage.setItem(STORAGE_KEY, next).catch((error) => {
+      captureOperationalError({ category: "STORAGE_WRITE_FAILURE", operation: "storage", storage: "theme", error });
+    });
   }, []);
 
   const scheme: ResolvedScheme =

@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -16,6 +17,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { designRadii, designSpacing } from "@/constants/designSystem";
+import { useDesignTokens } from "@/hooks/useDesignTokens";
 import {
   AI_LEVELS,
   AI_SCENARIOS,
@@ -28,7 +31,6 @@ import {
   type AiTutorMessage,
 } from "@/lib/aiTutor";
 import { useSubscription } from "@/lib/revenuecat";
-import { useColors } from "@/hooks/useColors";
 
 function getAiEndpoint() {
   const fromEnv = process.env.EXPO_PUBLIC_AI_TUTOR_API_URL;
@@ -55,7 +57,7 @@ function AssistantMessage({
   message: AiTutorMessage;
   isFallback?: boolean;
 }) {
-  const colors = useColors();
+  const { colors } = useDesignTokens();
   const isUser = message.role === "user";
 
   return (
@@ -69,27 +71,25 @@ function AssistantMessage({
         style={[
           styles.messageBubble,
           {
-            backgroundColor: isUser ? colors.primary : colors.card,
-            borderColor: isUser ? colors.primary : colors.border,
+            backgroundColor: isUser ? colors.brandSoft : colors.surfacePrimary,
+            borderColor: isUser ? colors.brandPrimary : colors.borderDefault,
           },
         ]}
       >
-        {!isUser && (
-          <View style={styles.messageMeta}>
-            <Ionicons
-              name={isFallback ? "sparkles-outline" : "school-outline"}
-              size={14}
-              color={colors.primary}
-            />
-            <Text style={[styles.messageMetaText, { color: colors.primary }]}>
-              {isFallback ? "Practice coach" : "AI tutor"}
-            </Text>
-          </View>
-        )}
+        <View style={styles.messageMeta}>
+          <Ionicons
+            name={isUser ? "person-outline" : "school-outline"}
+            size={14}
+            color={isUser ? colors.brandPrimary : colors.textSecondary}
+          />
+          <Text style={[styles.messageMetaText, { color: isUser ? colors.brandPrimary : colors.textSecondary }]}>
+            {isUser ? "You" : isFallback ? "Practice coach" : "Polish tutor"}
+          </Text>
+        </View>
         <Text
           style={[
             styles.messageText,
-            { color: isUser ? colors.primaryForeground : colors.foreground },
+            { color: colors.textPrimary },
           ]}
         >
           {message.text}
@@ -100,7 +100,7 @@ function AssistantMessage({
 }
 
 export default function AiTutorScreen() {
-  const colors = useColors();
+  const { colors } = useDesignTokens();
   const insets = useSafeAreaInsets();
   const { isPremium } = useSubscription();
   const listRef = useRef<FlatList<AiTutorMessage>>(null);
@@ -215,54 +215,58 @@ export default function AiTutorScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.screen, { backgroundColor: colors.background }]}
+      style={[styles.screen, { backgroundColor: colors.backgroundPrimary }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
         style={styles.topArea}
         contentContainerStyle={[
           styles.topContent,
-          { paddingTop: Platform.OS === "web" ? 67 + 14 : 14 },
+          { paddingTop: Platform.OS === "web" ? 83 : designSpacing.card },
         ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View>
-            <Text style={[styles.kicker, { color: colors.mutedForeground }]}>
-              CONVERSATION PRACTICE
-            </Text>
-            <Text style={[styles.title, { color: colors.foreground }]}>
-              AI Tutor
-            </Text>
+          <View style={styles.headerCopy}>
+            <Text style={[styles.kicker, { color: colors.textMuted }]}>Focused conversation practice</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>AI Tutor</Text>
           </View>
-          <View style={[styles.limitBadge, { backgroundColor: colors.primary + "15" }]}>
-            <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primary} />
-            <Text style={[styles.limitText, { color: colors.primary }]}>
+          <View
+            style={[styles.limitBadge, { backgroundColor: remaining === 0 ? colors.warningSoft : colors.brandSoft }]}
+            accessible
+            accessibilityLabel={`${remaining} of ${dailyLimit} AI tutor replies remaining today`}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color={remaining === 0 ? colors.warning : colors.brandPrimary} />
+            <Text style={[styles.limitText, { color: remaining === 0 ? colors.warning : colors.brandPrimary }]}>
               {remaining}/{dailyLimit} today
             </Text>
           </View>
         </View>
 
-        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
-          <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+        <View style={[styles.infoCard, { backgroundColor: colors.surfacePrimary, borderColor: colors.borderDefault }]}>
+          <Ionicons name="school-outline" size={20} color={colors.brandPrimary} />
+          <Text style={[styles.infoText, { color: colors.textSecondary }]}>
             Type a short answer. The tutor replies in Polish with a simple English explanation.
           </Text>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>LEVEL</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Choose your level</Text>
         <View style={styles.levelRow}>
           {AI_LEVELS.map((item) => {
             const active = item.id === level;
             return (
               <Pressable
                 key={item.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.label} level, ${item.description}`}
+                accessibilityHint="Sets the AI Tutor conversation level"
+                accessibilityState={{ selected: active }}
                 style={({ pressed }) => [
                   styles.levelChip,
                   {
-                    backgroundColor: active ? colors.primary : colors.card,
-                    borderColor: active ? colors.primary : colors.border,
-                    opacity: pressed ? 0.8 : 1,
+                    backgroundColor: active ? colors.brandSoft : pressed ? colors.surfaceSecondary : colors.surfacePrimary,
+                    borderColor: active ? colors.brandPrimary : colors.borderDefault,
+                    borderWidth: active ? 2 : 1,
                   },
                 ]}
                 onPress={() => {
@@ -273,7 +277,7 @@ export default function AiTutorScreen() {
                 <Text
                   style={[
                     styles.levelChipText,
-                    { color: active ? colors.primaryForeground : colors.foreground },
+                    { color: active ? colors.brandPrimary : colors.textPrimary },
                   ]}
                 >
                   {item.label}
@@ -282,23 +286,27 @@ export default function AiTutorScreen() {
             );
           })}
         </View>
-        <Text style={[styles.levelHelp, { color: colors.mutedForeground }]}>
+        <Text style={[styles.levelHelp, { color: colors.textMuted }]}>
           {selectedLevel.description}
         </Text>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SCENARIO</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>What would you like to practise?</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scenarioList}>
           {AI_SCENARIOS.map((item) => {
             const active = item.id === scenario.id;
             return (
               <Pressable
                 key={item.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.title}. ${item.description}`}
+                accessibilityHint="Starts this conversation scenario"
+                accessibilityState={{ selected: active }}
                 style={({ pressed }) => [
                   styles.scenarioCard,
                   {
-                    backgroundColor: active ? colors.primary + "12" : colors.card,
-                    borderColor: active ? colors.primary : colors.border,
-                    opacity: pressed ? 0.8 : 1,
+                    backgroundColor: active ? colors.brandSoft : pressed ? colors.surfaceSecondary : colors.surfacePrimary,
+                    borderColor: active ? colors.brandPrimary : colors.borderDefault,
+                    borderWidth: active ? 2 : 1,
                   },
                 ]}
                 onPress={() => {
@@ -306,10 +314,11 @@ export default function AiTutorScreen() {
                   Haptics.selectionAsync();
                 }}
               >
-                <Text style={[styles.scenarioTitle, { color: colors.foreground }]}>
-                  {item.title}
-                </Text>
-                <Text style={[styles.scenarioDesc, { color: colors.mutedForeground }]}>
+                <View style={styles.scenarioTitleRow}>
+                  {active ? <Ionicons name="checkmark-circle" size={17} color={colors.brandPrimary} /> : null}
+                  <Text style={[styles.scenarioTitle, { color: active ? colors.brandPrimary : colors.textPrimary }]}>{item.title}</Text>
+                </View>
+                <Text style={[styles.scenarioDesc, { color: colors.textMuted }]}>
                   {item.description}
                 </Text>
               </Pressable>
@@ -318,24 +327,34 @@ export default function AiTutorScreen() {
         </ScrollView>
       </ScrollView>
 
-      <View style={[styles.chatArea, { borderTopColor: colors.border }]}>
+      <View style={[styles.chatArea, { borderTopColor: colors.borderDefault }]}>
         <View style={styles.chatHeader}>
-          <Text style={[styles.chatTitle, { color: colors.foreground }]}>
-            {scenario.title}
-          </Text>
-          <Pressable onPress={resetConversation} hitSlop={8}>
-            <Text style={[styles.resetText, { color: colors.primary }]}>Reset</Text>
+          <View style={styles.chatHeadingCopy}>
+            <Text style={[styles.chatEyebrow, { color: colors.textMuted }]}>Your conversation</Text>
+            <Text style={[styles.chatTitle, { color: colors.textPrimary }]}>{scenario.title}</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reset conversation"
+            accessibilityHint={`Starts ${scenario.title} again`}
+            onPress={resetConversation}
+            style={({ pressed }) => [styles.resetButton, { backgroundColor: pressed ? colors.brandSoft : colors.surfacePrimary, borderColor: colors.borderDefault }]}
+          >
+            <Ionicons name="refresh-outline" size={17} color={colors.brandPrimary} />
+            <Text style={[styles.resetText, { color: colors.brandPrimary }]}>Reset</Text>
           </Pressable>
         </View>
         {!endpoint && (
-          <Text style={[styles.offlineText, { color: colors.mutedForeground }]}>
-            AI server not connected yet — using guided practice mode.
-          </Text>
+          <View style={[styles.modeNotice, { backgroundColor: colors.backgroundSecondary }]} accessible accessibilityLabel="Using guided practice mode">
+            <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+            <Text style={[styles.offlineText, { color: colors.textMuted }]}>Using guided practice while the AI tutor is not connected.</Text>
+          </View>
         )}
         {endpoint && lastSource === "local" ? (
-          <Text style={[styles.offlineText, { color: colors.mutedForeground }]}>
-            If the server is unavailable, the app falls back to guided practice.
-          </Text>
+          <View style={[styles.modeNotice, { backgroundColor: colors.backgroundSecondary }]}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+            <Text style={[styles.offlineText, { color: colors.textMuted }]}>Guided practice is available if the tutor cannot connect.</Text>
+          </View>
         ) : null}
 
         <FlatList
@@ -347,22 +366,30 @@ export default function AiTutorScreen() {
           )}
           contentContainerStyle={styles.messages}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          ListFooterComponent={sending ? (
+            <View style={[styles.thinkingRow, { backgroundColor: colors.surfacePrimary, borderColor: colors.borderDefault }]} accessibilityRole="text" accessibilityLiveRegion="polite">
+              <ActivityIndicator size="small" color={colors.brandPrimary} />
+              <Text style={[styles.thinkingText, { color: colors.textSecondary }]}>Your tutor is thinking…</Text>
+            </View>
+          ) : null}
         />
 
         <View
           style={[
             styles.inputRow,
             {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
+              backgroundColor: colors.surfacePrimary,
+              borderColor: colors.borderDefault,
               marginBottom: Platform.OS === "web" ? 100 : insets.bottom + 84,
             },
           ]}
         >
           <TextInput
-            style={[styles.input, { color: colors.foreground }]}
+            accessibilityLabel="Message to your Polish tutor"
+            accessibilityHint="Write a short Polish sentence"
+            style={[styles.input, { color: colors.textPrimary }]}
             placeholder="Write your answer..."
-            placeholderTextColor={colors.mutedForeground}
+            placeholderTextColor={colors.textMuted}
             value={input}
             onChangeText={setInput}
             multiline
@@ -371,10 +398,14 @@ export default function AiTutorScreen() {
             maxLength={500}
           />
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={sending ? "Sending message" : "Send message"}
+            accessibilityHint="Sends your answer to the Polish tutor"
+            accessibilityState={{ disabled: sending || !input.trim(), busy: sending }}
             style={({ pressed }) => [
               styles.sendBtn,
               {
-                backgroundColor: colors.primary,
+                backgroundColor: sending || !input.trim() ? colors.backgroundSecondary : pressed ? colors.brandPressed : colors.brandPrimary,
                 opacity: pressed || sending || !input.trim() ? 0.65 : 1,
               },
             ]}
@@ -383,8 +414,8 @@ export default function AiTutorScreen() {
           >
             <Ionicons
               name={sending ? "hourglass-outline" : "send"}
-              size={18}
-              color={colors.primaryForeground}
+              size={20}
+              color={sending || !input.trim() ? colors.textMuted : colors.textInverse}
             />
           </Pressable>
         </View>
@@ -395,42 +426,50 @@ export default function AiTutorScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topArea: { flexGrow: 0, maxHeight: 255 },
-  topContent: { paddingHorizontal: 16, paddingBottom: 10 },
+  topArea: { flex: 1, minHeight: 0 },
+  topContent: { paddingHorizontal: designSpacing.gutter, paddingBottom: designSpacing.section },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 10,
+    gap: designSpacing.element,
+    marginBottom: designSpacing.compact,
   },
-  kicker: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1.3, marginBottom: 3 },
-  title: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
-  limitBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 20 },
-  limitText: { fontSize: 13, fontFamily: "Inter_700Bold" },
-  infoCard: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, borderRadius: 14, borderWidth: 1, marginBottom: 10 },
+  headerCopy: { flex: 1, minWidth: 0 },
+  kicker: { fontSize: 13, lineHeight: 19, fontFamily: "Inter_400Regular", marginBottom: 2 },
+  title: { fontSize: 28, lineHeight: 34, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+  limitBadge: { minHeight: 36, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: designSpacing.element, borderRadius: designRadii.pill },
+  limitText: { fontSize: 12, lineHeight: 17, fontFamily: "Inter_700Bold" },
+  infoCard: { flexDirection: "row", alignItems: "flex-start", gap: designSpacing.compact, padding: designSpacing.compact, borderRadius: designRadii.control, borderWidth: 1, marginBottom: designSpacing.compact },
   infoText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  sectionLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, marginBottom: 6 },
-  levelRow: { flexDirection: "row", gap: 7, marginBottom: 4 },
-  levelChip: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
-  levelChipText: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  levelHelp: { fontSize: 11, fontFamily: "Inter_400Regular", marginBottom: 10 },
-  scenarioList: { gap: 10, paddingRight: 20 },
-  scenarioCard: { width: 165, borderWidth: 1, borderRadius: 14, padding: 10, gap: 4 },
-  scenarioTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  scenarioDesc: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 15 },
-  chatArea: { flex: 1, borderTopWidth: 1, paddingTop: 10 },
-  chatHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, marginBottom: 4 },
-  chatTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  resetText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  offlineText: { paddingHorizontal: 16, fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 8 },
-  messages: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 14, gap: 10 },
+  sectionLabel: { fontSize: 13, lineHeight: 19, fontFamily: "Inter_600SemiBold", marginBottom: designSpacing.compact },
+  levelRow: { flexDirection: "row", gap: designSpacing.compact, marginBottom: 4 },
+  levelChip: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: designRadii.control, borderWidth: 1 },
+  levelChipText: { fontSize: 14, lineHeight: 20, fontFamily: "Inter_700Bold" },
+  levelHelp: { fontSize: 12, lineHeight: 17, fontFamily: "Inter_400Regular", marginBottom: designSpacing.compact },
+  scenarioList: { gap: designSpacing.compact, paddingRight: designSpacing.gutter },
+  scenarioCard: { width: 172, borderWidth: 1, borderRadius: designRadii.card, padding: designSpacing.compact, gap: 4 },
+  scenarioTitleRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  scenarioTitle: { flexShrink: 1, fontSize: 14, lineHeight: 20, fontFamily: "Inter_700Bold" },
+  scenarioDesc: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  chatArea: { flex: 1, minHeight: 0, borderTopWidth: 1, paddingTop: designSpacing.compact },
+  chatHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: designSpacing.element, paddingHorizontal: designSpacing.gutter, marginBottom: designSpacing.compact },
+  chatHeadingCopy: { flex: 1, minWidth: 0 },
+  chatEyebrow: { fontSize: 11, lineHeight: 16, fontFamily: "Inter_500Medium" },
+  chatTitle: { fontSize: 18, lineHeight: 24, fontFamily: "Inter_700Bold" },
+  resetButton: { minHeight: 48, paddingHorizontal: designSpacing.element, borderRadius: designRadii.control, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 5 },
+  resetText: { fontSize: 13, lineHeight: 18, fontFamily: "Inter_600SemiBold" },
+  modeNotice: { minHeight: 36, marginHorizontal: designSpacing.gutter, marginBottom: designSpacing.compact, paddingHorizontal: designSpacing.element, borderRadius: designRadii.small, flexDirection: "row", alignItems: "center", gap: 6 },
+  offlineText: { flex: 1, fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular" },
+  messages: { paddingHorizontal: designSpacing.gutter, paddingTop: 4, paddingBottom: designSpacing.element, gap: designSpacing.compact },
   messageRow: { flexDirection: "row" },
-  messageBubble: { maxWidth: "94%", borderRadius: 16, borderWidth: 1, padding: 12, gap: 6 },
+  messageBubble: { maxWidth: "92%", borderRadius: designRadii.card, borderWidth: 1, padding: designSpacing.element, gap: 6 },
   messageMeta: { flexDirection: "row", alignItems: "center", gap: 5 },
-  messageMetaText: { fontSize: 11, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 0.7 },
-  messageText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 21 },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, marginHorizontal: 16, borderRadius: 16, borderWidth: 1, padding: 10 },
-  input: { flex: 1, minHeight: 72, maxHeight: 150, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, paddingHorizontal: 4, paddingVertical: 8 },
-  sendBtn: { width: 46, height: 46, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  messageMetaText: { fontSize: 11, lineHeight: 16, fontFamily: "Inter_600SemiBold" },
+  messageText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  thinkingRow: { alignSelf: "flex-start", minHeight: 44, borderRadius: designRadii.card, borderWidth: 1, paddingHorizontal: designSpacing.element, flexDirection: "row", alignItems: "center", gap: designSpacing.compact },
+  thinkingText: { fontSize: 13, lineHeight: 19, fontFamily: "Inter_500Medium" },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: designSpacing.compact, marginHorizontal: designSpacing.gutter, borderRadius: designRadii.card, borderWidth: 1, padding: designSpacing.compact },
+  input: { flex: 1, minHeight: 52, maxHeight: 140, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, paddingHorizontal: 4, paddingVertical: designSpacing.compact },
+  sendBtn: { width: 48, height: 48, borderRadius: designRadii.control, alignItems: "center", justifyContent: "center" },
 });

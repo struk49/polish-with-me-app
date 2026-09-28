@@ -1,5 +1,6 @@
 import * as Haptics from "expo-haptics";
-import React, { useCallback, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -17,11 +18,14 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ProgressBar, StatusBadge } from "@/components/HomePrimitives";
+import { designRadii, designSpacing } from "@/constants/designSystem";
 import { useProgress } from "@/contexts/ProgressContext";
 import { isLevelFree } from "@/contexts/SubscriptionContext";
-import { useSubscription } from "@/lib/revenuecat";
 import { getOrderedLessons, type Lesson, type Word } from "@/data/lessons";
-import { useColors } from "@/hooks/useColors";
+import { useDesignTokens } from "@/hooks/useDesignTokens";
+import { getAccessiblePracticeSelection } from "@/lib/practiceAccess";
+import { useSubscription } from "@/lib/revenuecat";
 
 function FlashCard({
   word,
@@ -36,7 +40,7 @@ function FlashCard({
   cardIndex: number;
   total: number;
 }) {
-  const colors = useColors();
+  const { colors } = useDesignTokens();
   const [showing, setShowing] = useState(false);
   const scaleX = useSharedValue(1);
   const { isWordKnown } = useProgress();
@@ -69,28 +73,13 @@ function FlashCard({
     <View style={styles.flashContainer}>
       {/* Counter */}
       <View style={styles.cardCounter}>
-        <Text style={[styles.cardCounterText, { color: colors.mutedForeground }]}>
-          {cardIndex + 1} / {total}
+        <Text style={[styles.cardCounterText, { color: colors.textSecondary }]}>
+          Card {cardIndex + 1} of {total}
         </Text>
-        {known && (
-          <View style={[styles.knownBadge, { backgroundColor: colors.success + "20" }]}>
-            <Text style={[styles.knownBadgeText, { color: colors.success }]}>Known ✓</Text>
-          </View>
-        )}
+        {known ? <StatusBadge label="KNOWN" backgroundColor={colors.successSoft} color={colors.success} icon="checkmark" /> : null}
       </View>
 
-      {/* Progress bar */}
-      <View style={[styles.progressTrack, { backgroundColor: colors.secondary }]}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              backgroundColor: colors.primary,
-              width: `${((cardIndex) / total) * 100}%` as any,
-            },
-          ]}
-        />
-      </View>
+      <ProgressBar value={(cardIndex / total) * 100} height={6} label={`Practice progress, card ${cardIndex + 1} of ${total}`} />
 
       {/* Card area — scrolls so it never overlaps the buttons on short screens */}
       <ScrollView
@@ -98,61 +87,69 @@ function FlashCard({
         contentContainerStyle={styles.cardScrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={handleFlip} style={styles.cardPressable}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={showing ? `English: ${word.english}. Polish: ${word.polish}` : `Polish word: ${word.polish}`}
+          accessibilityHint={showing ? "Flips back to the Polish side" : "Reveals the English translation"}
+          onPress={handleFlip}
+          style={styles.cardPressable}
+        >
           <Animated.View
             style={[
               styles.card,
               cardStyle,
-              { backgroundColor: colors.card, borderColor: showing ? colors.primary + "60" : colors.border },
+              { backgroundColor: colors.surfacePrimary, borderColor: showing ? colors.brandPrimary : colors.borderDefault },
             ]}
           >
             {!showing ? (
               <View style={styles.cardFace}>
-                <Text style={[styles.cardHint, { color: colors.mutedForeground }]}>
+                <Text style={[styles.cardHint, { color: colors.textMuted }]}>
                   POLISH
                 </Text>
-                <Text style={[styles.polishWord, { color: colors.foreground }]}>
+                <Text style={[styles.polishWord, { color: colors.textPrimary }]}>
                   {word.polish}
                 </Text>
-                <Text style={[styles.phoneticText, { color: colors.mutedForeground }]}>
+                <Text style={[styles.phoneticText, { color: colors.textSecondary }]}>
                   {word.phonetic}
                 </Text>
-                <Text style={[styles.tapHint, { color: colors.mutedForeground }]}>
-                  Tap to reveal English
-                </Text>
+                <View style={[styles.flipHint, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Ionicons name="sync-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap to reveal English</Text>
+                </View>
               </View>
             ) : (
               <View style={styles.cardFace}>
-                <Text style={[styles.cardHint, { color: colors.primary }]}>
+                <Text style={[styles.cardHint, { color: colors.brandPrimary }]}>
                   ENGLISH
                 </Text>
-                <Text style={[styles.englishWord, { color: colors.primary }]}>
+                <Text style={[styles.englishWord, { color: colors.brandPrimary }]}>
                   {word.english}
                 </Text>
-                <Text style={[styles.polishWordSmall, { color: colors.foreground }]}>
+                <Text style={[styles.polishWordSmall, { color: colors.textPrimary }]}>
                   {word.polish}
                 </Text>
-                <Text style={[styles.phoneticText, { color: colors.mutedForeground }]}>
+                <Text style={[styles.phoneticText, { color: colors.textSecondary }]}>
                   {word.phonetic}
                 </Text>
                 {word.example ? (
-                  <View style={[styles.exampleBox, { backgroundColor: colors.secondary }]}>
-                    <Text style={[styles.exampleLabel, { color: colors.mutedForeground }]}>
+                  <View style={[styles.exampleBox, { backgroundColor: colors.backgroundSecondary }]}>
+                    <Text style={[styles.exampleLabel, { color: colors.textMuted }]}>
                       EXAMPLE
                     </Text>
-                    <Text style={[styles.exampleText, { color: colors.foreground }]}>
+                    <Text style={[styles.exampleText, { color: colors.textPrimary }]}>
                       {word.example}
                     </Text>
                     {word.exampleTranslation ? (
-                      <Text style={[styles.exampleTranslation, { color: colors.mutedForeground }]}>
+                      <Text style={[styles.exampleTranslation, { color: colors.textSecondary }]}>
                         {word.exampleTranslation}
                       </Text>
                     ) : null}
                   </View>
                 ) : null}
-                <Text style={[styles.tapHint, { color: colors.mutedForeground }]}>
-                  Tap to flip back
-                </Text>
+                <View style={[styles.flipHint, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Ionicons name="sync-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap to flip back</Text>
+                </View>
               </View>
             )}
           </Animated.View>
@@ -162,24 +159,30 @@ function FlashCard({
       {/* Action buttons */}
       <View style={styles.actionRow}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Not yet"
+          accessibilityHint="Marks this word for more review and moves to the next card"
           style={({ pressed }) => [
             styles.actionBtn,
-            { backgroundColor: colors.secondary, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+            { backgroundColor: pressed ? colors.surfaceSecondary : colors.surfacePrimary, borderColor: colors.borderStrong },
           ]}
           onPress={handleSkip}
         >
-          <Text style={styles.actionEmoji}>🔄</Text>
-          <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Not yet</Text>
+          <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
+          <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Not yet</Text>
         </Pressable>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Got it"
+          accessibilityHint="Marks this word as known and moves to the next card"
           style={({ pressed }) => [
             styles.actionBtn,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 },
+            { backgroundColor: pressed ? colors.brandPressed : colors.brandPrimary, borderColor: pressed ? colors.brandPressed : colors.brandPrimary },
           ]}
           onPress={handleKnow}
         >
-          <Text style={styles.actionEmoji}>✓</Text>
-          <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Got it!</Text>
+          <Ionicons name="checkmark" size={20} color={colors.textInverse} />
+          <Text style={[styles.actionBtnText, { color: colors.textInverse }]}>Got it</Text>
         </Pressable>
       </View>
     </View>
@@ -187,10 +190,10 @@ function FlashCard({
 }
 
 export default function PracticeScreen() {
-  const colors = useColors();
+  const { colors } = useDesignTokens();
   const insets = useSafeAreaInsets();
   const { toggleKnownWord, isWordKnown, knownWords } = useProgress();
-  const { isPremium } = useSubscription();
+  const { isPremium, isEntitlementLoading } = useSubscription();
   const orderedLessons = getOrderedLessons();
   const [selectedLesson, setSelectedLesson] = useState<Lesson>(orderedLessons[0]);
   const [cardIndex, setCardIndex] = useState(0);
@@ -200,8 +203,23 @@ export default function PracticeScreen() {
   const visibleLessons = orderedLessons.filter(
     (l) => isPremium || isLevelFree(l.level)
   );
+  const activeLesson =
+    getAccessiblePracticeSelection({
+      selectedLesson,
+      accessibleLessons: visibleLessons,
+      entitlementReady: !isEntitlementLoading,
+    }) ?? selectedLesson;
 
-  const words = selectedLesson.words;
+  useEffect(() => {
+    if (activeLesson.id === selectedLesson.id) return;
+
+    setSelectedLesson(activeLesson);
+    setCardIndex(0);
+    setSession({ known: 0, skipped: 0 });
+    setDone(false);
+  }, [activeLesson, selectedLesson]);
+
+  const words = activeLesson.words;
 
   const handleLessonSelect = (lesson: Lesson) => {
     setSelectedLesson(lesson);
@@ -230,30 +248,30 @@ export default function PracticeScreen() {
     setDone(false);
   };
 
-  const paddingTop = Platform.OS === "web" ? 67 + 16 : insets.top + 16;
+  const paddingTop = Platform.OS === "web" ? 67 + 16 : insets.top + designSpacing.card;
   const paddingBottom = Platform.OS === "web" ? 34 + 80 : insets.bottom + 80;
 
   return (
     <View
       style={[
         styles.screen,
-        { backgroundColor: colors.background, paddingTop, paddingBottom },
+        { backgroundColor: colors.backgroundPrimary, paddingTop, paddingBottom },
       ]}
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Practice</Text>
-        <View style={[styles.wordsBadge, { backgroundColor: colors.primary + "15" }]}>
-          <Text style={[styles.wordsBadgeText, { color: colors.primary }]}>
-            {knownWords.length} words mastered
-          </Text>
+        <View style={styles.headerCopy}>
+          <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Build your vocabulary</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Practice</Text>
+        </View>
+        <View style={[styles.wordsBadge, { backgroundColor: colors.brandSoft }]} accessible accessibilityLabel={`${knownWords.length} words mastered`}>
+          <Ionicons name="ribbon-outline" size={16} color={colors.brandPrimary} />
+          <Text style={[styles.wordsBadgeText, { color: colors.brandPrimary }]}>{knownWords.length}</Text>
         </View>
       </View>
 
       {/* Lesson picker */}
-      <Text style={[styles.pickerLabel, { color: colors.mutedForeground }]}>
-        CHOOSE LESSON
-      </Text>
+      <Text style={[styles.pickerLabel, { color: colors.textSecondary }]}>Choose a lesson</Text>
       <FlatList
         horizontal
         data={visibleLessons}
@@ -262,15 +280,19 @@ export default function PracticeScreen() {
         contentContainerStyle={styles.pickerList}
         showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => {
-          const active = selectedLesson.id === item.id;
+          const active = activeLesson.id === item.id;
           return (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${item.title}, ${item.level}, ${item.words.length} words`}
+              accessibilityHint="Starts practice with this lesson"
+              accessibilityState={{ selected: active }}
               style={({ pressed }) => [
                 styles.pickerChip,
                 {
-                  backgroundColor: active ? colors.primary : colors.card,
-                  borderColor: active ? colors.primary : colors.border,
-                  opacity: pressed ? 0.8 : 1,
+                  backgroundColor: active ? colors.brandSoft : pressed ? colors.surfaceSecondary : colors.surfacePrimary,
+                  borderColor: active ? colors.brandPrimary : colors.borderDefault,
+                  borderWidth: active ? 2 : 1,
                 },
               ]}
               onPress={() => handleLessonSelect(item)}
@@ -278,7 +300,7 @@ export default function PracticeScreen() {
               <Text
                 style={[
                   styles.pickerChipText,
-                  { color: active ? colors.primaryForeground : colors.foreground },
+                  { color: active ? colors.brandPrimary : colors.textPrimary },
                 ]}
               >
                 {item.title}
@@ -286,7 +308,7 @@ export default function PracticeScreen() {
               <Text
                 style={[
                   styles.pickerChipSub,
-                  { color: active ? colors.primaryForeground + "BB" : colors.mutedForeground },
+                  { color: active ? colors.brandPrimary : colors.textMuted },
                 ]}
               >
                 {item.words.length} words
@@ -302,54 +324,57 @@ export default function PracticeScreen() {
           <View
             style={[
               styles.doneCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              { backgroundColor: colors.surfacePrimary, borderColor: colors.borderDefault },
             ]}
           >
-            <Text style={styles.doneEmoji}>🎉</Text>
-            <Text style={[styles.doneTitle, { color: colors.foreground }]}>
-              Session Complete!
-            </Text>
+            <View style={[styles.doneIcon, { backgroundColor: colors.successSoft }]}>
+              <Ionicons name="checkmark" size={30} color={colors.success} />
+            </View>
+            <View style={styles.doneHeading}>
+              <Text style={[styles.doneTitle, { color: colors.textPrimary }]}>Practice complete</Text>
+              <Text style={[styles.doneSubtitle, { color: colors.textSecondary }]}>{activeLesson.title}</Text>
+            </View>
             <View style={styles.doneStats}>
-              <View style={styles.doneStat}>
+              <View style={[styles.doneStat, { backgroundColor: colors.successSoft }]}>
                 <Text style={[styles.doneStatNum, { color: colors.success }]}>
                   {session.known}
                 </Text>
-                <Text style={[styles.doneStatLabel, { color: colors.mutedForeground }]}>
+                <Text style={[styles.doneStatLabel, { color: colors.textSecondary }]}>
                   Got it
                 </Text>
               </View>
-              <View style={[styles.doneStatDiv, { backgroundColor: colors.border }]} />
-              <View style={styles.doneStat}>
-                <Text style={[styles.doneStatNum, { color: colors.mutedForeground }]}>
+              <View style={[styles.doneStat, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.doneStatNum, { color: colors.textPrimary }]}>
                   {session.skipped}
                 </Text>
-                <Text style={[styles.doneStatLabel, { color: colors.mutedForeground }]}>
+                <Text style={[styles.doneStatLabel, { color: colors.textSecondary }]}>
                   Review
                 </Text>
               </View>
-              <View style={[styles.doneStatDiv, { backgroundColor: colors.border }]} />
-              <View style={styles.doneStat}>
-                <Text style={[styles.doneStatNum, { color: colors.primary }]}>
+              <View style={[styles.doneStat, { backgroundColor: colors.brandSoft }]}>
+                <Text style={[styles.doneStatNum, { color: colors.brandPrimary }]}>
                   {Math.round((session.known / words.length) * 100)}%
                 </Text>
-                <Text style={[styles.doneStatLabel, { color: colors.mutedForeground }]}>
+                <Text style={[styles.doneStatLabel, { color: colors.textSecondary }]}>
                   Score
                 </Text>
               </View>
             </View>
-            <Text style={[styles.knownTotal, { color: colors.mutedForeground }]}>
+            <Text style={[styles.knownTotal, { color: colors.textMuted }]}>
               {knownWords.length} total words mastered
             </Text>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Practice again"
+              accessibilityHint={`Restarts ${activeLesson.title} from the first card`}
               style={({ pressed }) => [
                 styles.restartBtn,
-                { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 },
+                { backgroundColor: pressed ? colors.brandPressed : colors.brandPrimary },
               ]}
               onPress={restart}
             >
-              <Text style={[styles.restartBtnText, { color: colors.primaryForeground }]}>
-                Practice Again
-              </Text>
+              <Text style={[styles.restartBtnText, { color: colors.textInverse }]}>Practice again</Text>
+              <Ionicons name="refresh" size={20} color={colors.textInverse} />
             </Pressable>
           </View>
         ) : (
@@ -373,53 +398,62 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    paddingHorizontal: designSpacing.gutter,
+    marginBottom: designSpacing.card,
   },
-  headerTitle: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  headerCopy: { flex: 1, minWidth: 0 },
+  eyebrow: { fontSize: 13, lineHeight: 19, fontFamily: "Inter_400Regular", marginBottom: 2 },
+  headerTitle: { fontSize: 28, lineHeight: 34, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
   wordsBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    minWidth: 48,
+    minHeight: 36,
+    paddingHorizontal: designSpacing.element,
+    borderRadius: designRadii.pill,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
   },
-  wordsBadgeText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  wordsBadgeText: { fontSize: 13, lineHeight: 18, fontFamily: "Inter_700Bold" },
   pickerLabel: {
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 19,
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: 1.2,
-    paddingHorizontal: 20,
-    marginBottom: 8,
+    paddingHorizontal: designSpacing.gutter,
+    marginBottom: designSpacing.compact,
   },
   pickerFlatList: {
     flexGrow: 0,
     flexShrink: 0,
-    height: 76,
+    minHeight: 76,
   },
   pickerList: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    gap: 8,
+    paddingHorizontal: designSpacing.gutter,
+    paddingBottom: designSpacing.card,
+    gap: designSpacing.compact,
     alignItems: "flex-start",
   },
   pickerChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+    minHeight: 56,
+    paddingHorizontal: designSpacing.element,
+    paddingVertical: designSpacing.compact,
+    borderRadius: designRadii.control,
     borderWidth: 1,
-    gap: 2,
+    justifyContent: "center",
+    gap: 1,
     alignSelf: "flex-start",
   },
-  pickerChipText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  pickerChipSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  pickerChipText: { fontSize: 14, lineHeight: 20, fontFamily: "Inter_600SemiBold" },
+  pickerChipSub: { fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular" },
   cardArea: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 16,
+    paddingHorizontal: designSpacing.gutter,
+    paddingTop: 2,
+    paddingBottom: designSpacing.card,
   },
   flashContainer: {
     flex: 1,
-    gap: 12,
+    gap: designSpacing.element,
   },
   cardCounter: {
     flexDirection: "row",
@@ -427,22 +461,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 4,
   },
-  cardCounterText: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  knownBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  knownBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  progressTrack: {
-    height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
+  cardCounterText: { fontSize: 13, lineHeight: 19, fontFamily: "Inter_500Medium" },
   cardScrollArea: {
     flex: 1,
   },
@@ -455,17 +474,17 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    minHeight: 260,
-    borderRadius: 20,
-    borderWidth: 1.5,
+    minHeight: 248,
+    borderRadius: designRadii.feature,
+    borderWidth: 2,
     overflow: "hidden",
     justifyContent: "center",
   },
   cardFace: {
     alignItems: "center",
     justifyContent: "center",
-    padding: 28,
-    gap: 10,
+    padding: designSpacing.section,
+    gap: designSpacing.compact,
   },
   cardHint: {
     fontSize: 11,
@@ -473,7 +492,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   polishWord: {
-    fontSize: 34,
+    fontSize: 32,
     fontFamily: "Inter_700Bold",
     textAlign: "center",
     letterSpacing: -0.5,
@@ -490,11 +509,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 36,
   },
-  tapHint: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    marginTop: 4,
-  },
+  flipHint: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: designRadii.pill, paddingHorizontal: designSpacing.element, marginTop: 4 },
+  tapHint: { fontSize: 12, lineHeight: 17, fontFamily: "Inter_500Medium" },
   phoneticText: {
     fontSize: 16,
     fontFamily: "Inter_400Regular",
@@ -502,8 +518,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   exampleBox: {
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: designRadii.control,
+    padding: designSpacing.element,
     width: "100%",
     gap: 4,
     marginTop: 4,
@@ -529,12 +545,14 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: designSpacing.element,
   },
   actionBtn: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 14,
+    minHeight: 52,
+    paddingHorizontal: designSpacing.element,
+    paddingVertical: designSpacing.element,
+    borderRadius: designRadii.control,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
@@ -542,28 +560,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
-  actionEmoji: { fontSize: 18 },
-  actionBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  actionBtnText: { fontSize: 15, lineHeight: 20, fontFamily: "Inter_600SemiBold" },
   doneCard: {
-    borderRadius: 20,
+    borderRadius: designRadii.feature,
     borderWidth: 1,
-    padding: 32,
+    padding: designSpacing.gutter,
     alignItems: "center",
-    gap: 16,
+    gap: designSpacing.card,
   },
-  doneEmoji: { fontSize: 48 },
-  doneTitle: { fontSize: 24, fontFamily: "Inter_700Bold" },
-  doneStats: { flexDirection: "row", alignItems: "center", gap: 20 },
-  doneStat: { alignItems: "center", gap: 4 },
-  doneStatNum: { fontSize: 30, fontFamily: "Inter_700Bold" },
-  doneStatLabel: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  doneStatDiv: { width: 1, height: 36 },
-  knownTotal: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  doneIcon: { width: 56, height: 56, borderRadius: designRadii.pill, alignItems: "center", justifyContent: "center" },
+  doneHeading: { alignItems: "center", gap: 2 },
+  doneTitle: { fontSize: 24, lineHeight: 31, fontFamily: "Inter_700Bold", textAlign: "center" },
+  doneSubtitle: { fontSize: 14, lineHeight: 20, fontFamily: "Inter_400Regular", textAlign: "center" },
+  doneStats: { width: "100%", flexDirection: "row", gap: designSpacing.compact },
+  doneStat: { flex: 1, minWidth: 0, alignItems: "center", gap: 2, paddingVertical: designSpacing.element, borderRadius: designRadii.control },
+  doneStatNum: { fontSize: 22, lineHeight: 28, fontFamily: "Inter_700Bold" },
+  doneStatLabel: { fontSize: 11, lineHeight: 16, fontFamily: "Inter_500Medium" },
+  knownTotal: { fontSize: 13, lineHeight: 19, fontFamily: "Inter_400Regular", textAlign: "center" },
   restartBtn: {
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 4,
+    width: "100%",
+    minHeight: 48,
+    paddingHorizontal: designSpacing.card,
+    borderRadius: designRadii.control,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: designSpacing.compact,
   },
-  restartBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  restartBtnText: { fontSize: 16, lineHeight: 20, fontFamily: "Inter_600SemiBold" },
 });

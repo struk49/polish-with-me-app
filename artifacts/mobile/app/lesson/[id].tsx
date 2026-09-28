@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Speech from "expo-speech";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -15,8 +16,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useProgress } from "@/contexts/ProgressContext";
+import { canAccessLevel } from "@/contexts/SubscriptionContext";
 import { LESSONS, type Word } from "@/data/lessons";
 import { useColors } from "@/hooks/useColors";
+import { useSubscription } from "@/lib/revenuecat";
 
 const LEVEL_COLORS: Record<string, string> = {
   A1: "#34C759",
@@ -91,27 +94,32 @@ function WordRow({ word, index }: { word: Word; index: number }) {
       </View>
       <View style={styles.wordActions}>
         <Pressable
+          style={styles.wordAction}
           onPress={handleSpeak}
-          hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={`Hear ${word.polish}`}
+          accessibilityLabel={`${speaking ? "Stop" : "Play"} pronunciation for ${word.polish}`}
+          accessibilityState={{ selected: speaking }}
         >
           <Ionicons
+            accessible={false}
             name={speaking ? "volume-high" : "volume-medium-outline"}
             size={24}
             color={speaking ? colors.primary : colors.mutedForeground}
           />
         </Pressable>
         <Pressable
+          style={styles.wordAction}
           onPress={() => {
             toggleKnownWord(word.id);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={known ? "Mark word as not known" : "Mark word as known"}
+          accessibilityRole="checkbox"
+          accessibilityLabel={`${word.polish}, known word`}
+          accessibilityHint="Double tap to change known-word status"
+          accessibilityState={{ checked: known }}
         >
           <Ionicons
+            accessible={false}
             name={known ? "checkmark-circle" : "checkmark-circle-outline"}
             size={24}
             color={known ? colors.primary : colors.border}
@@ -127,9 +135,17 @@ export default function LessonScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { isLessonCompleted, completeLesson } = useProgress();
+  const { isLessonCompleted } = useProgress();
+  const { isPremium, isEntitlementLoading } = useSubscription();
 
   const lesson = LESSONS.find((l) => l.id === id);
+  const canAccessLesson = !lesson || canAccessLevel(isPremium, lesson.level);
+
+  useEffect(() => {
+    if (lesson && !isEntitlementLoading && !canAccessLesson) {
+      router.replace("/paywall");
+    }
+  }, [canAccessLesson, isEntitlementLoading, lesson, router]);
 
   if (!lesson) {
     return (
@@ -137,6 +153,16 @@ export default function LessonScreen() {
         <Text style={[styles.errorText, { color: colors.mutedForeground }]}>
           Lesson not found.
         </Text>
+      </View>
+    );
+  }
+
+  if (isEntitlementLoading || !canAccessLesson) {
+    return (
+      <View
+        style={[styles.screen, { backgroundColor: colors.background, justifyContent: "center" }]}
+      >
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
@@ -151,7 +177,6 @@ export default function LessonScreen() {
   };
 
   const handleStartQuiz = () => {
-    completeLesson(lesson.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push(`/quiz/${lesson.id}`);
   };
@@ -175,30 +200,30 @@ export default function LessonScreen() {
             </View>
             {completed && (
               <View style={[styles.completedBadge, { backgroundColor: colors.primary + "15" }]}>
-                <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
+                <Ionicons accessible={false} name="checkmark-circle" size={14} color={colors.primary} />
                 <Text style={[styles.completedText, { color: colors.primary }]}>Completed</Text>
               </View>
             )}
           </View>
-          <Text style={[styles.heroTitle, { color: colors.foreground }]}>{lesson.title}</Text>
+          <Text accessibilityRole="header" style={[styles.heroTitle, { color: colors.foreground }]}>{lesson.title}</Text>
           <Text style={[styles.heroDesc, { color: colors.mutedForeground }]}>
             {lesson.description}
           </Text>
           <View style={styles.heroStats}>
             <View style={styles.heroStat}>
-              <Ionicons name="library-outline" size={15} color={colors.mutedForeground} />
+              <Ionicons accessible={false} name="library-outline" size={15} color={colors.mutedForeground} />
               <Text style={[styles.heroStatText, { color: colors.mutedForeground }]}>
                 {lesson.words.length} words
               </Text>
             </View>
             <View style={styles.heroStat}>
-              <Ionicons name="time-outline" size={15} color={colors.mutedForeground} />
+              <Ionicons accessible={false} name="time-outline" size={15} color={colors.mutedForeground} />
               <Text style={[styles.heroStatText, { color: colors.mutedForeground }]}>
                 {lesson.estimatedMinutes ?? Math.ceil(lesson.words.length / 3)} min
               </Text>
             </View>
             <View style={styles.heroStat}>
-              <Ionicons name="school-outline" size={15} color={levelColor} />
+              <Ionicons accessible={false} name="school-outline" size={15} color={levelColor} />
               <Text style={[styles.heroStatText, { color: levelColor }]}>
                 {lesson.category}
               </Text>
@@ -215,8 +240,8 @@ export default function LessonScreen() {
             ]}
           >
             <View style={styles.grammarHeader}>
-              <Ionicons name="school" size={18} color={levelColor} />
-              <Text style={[styles.grammarTitle, { color: levelColor }]}>Grammar Note</Text>
+              <Ionicons accessible={false} name="school" size={18} color={levelColor} />
+              <Text accessibilityRole="header" style={[styles.grammarTitle, { color: levelColor }]}>Grammar Note</Text>
             </View>
             <Text style={[styles.grammarText, { color: colors.foreground }]}>
               {lesson.grammarNote}
@@ -231,8 +256,8 @@ export default function LessonScreen() {
             ]}
           >
             <View style={styles.grammarHeader}>
-              <Ionicons name="information-circle" size={18} color={colors.primary} />
-              <Text style={[styles.grammarTitle, { color: colors.primary }]}>
+              <Ionicons accessible={false} name="information-circle" size={18} color={colors.primary} />
+              <Text accessibilityRole="header" style={[styles.grammarTitle, { color: colors.primary }]}>
                 Pronunciation tip
               </Text>
             </View>
@@ -244,7 +269,7 @@ export default function LessonScreen() {
         )}
 
         {/* Vocabulary */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+        <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.foreground }]}>
           Vocabulary · {lesson.words.length} words
         </Text>
         <View style={styles.wordList}>
@@ -271,8 +296,11 @@ export default function LessonScreen() {
             { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
           ]}
           onPress={handleStartQuiz}
+          accessibilityRole="button"
+          accessibilityLabel={completed ? "Retake quiz" : "Take quiz"}
+          accessibilityHint={`Opens the quiz for ${lesson.title}`}
         >
-          <Ionicons name="school-outline" size={20} color={colors.primaryForeground} />
+          <Ionicons accessible={false} name="school-outline" size={20} color={colors.primaryForeground} />
           <Text style={[styles.quizBtnText, { color: colors.primaryForeground }]}>
             {completed ? "Retake Quiz" : "Take Quiz"}
           </Text>
@@ -323,7 +351,8 @@ const styles = StyleSheet.create({
   },
   wordIndexText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   wordContent: { flex: 1, gap: 3 },
-  wordActions: { alignItems: "center", gap: 12, paddingTop: 2 },
+  wordActions: { alignItems: "center", gap: 4, paddingTop: 2 },
+  wordAction: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   polishWord: { fontSize: 18, fontFamily: "Inter_700Bold" },
   phonetic: { fontSize: 13, fontFamily: "Inter_400Regular", fontStyle: "italic" },
   english: { fontSize: 15, fontFamily: "Inter_500Medium" },

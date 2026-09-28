@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { captureOperationalError } from "@/lib/observability";
 
 export type AiLevel = "A1" | "A2" | "B1" | "B2";
 
@@ -64,6 +65,24 @@ export const AI_SCENARIOS: AiScenario[] = [
 export const AI_FREE_DAILY_LIMIT = 3;
 export const AI_PRO_DAILY_LIMIT = 15;
 
+const AI_INSTALLATION_ID_KEY = "aiTutorInstallationId";
+
+function createInstallationId() {
+  const randomPart = Array.from({ length: 4 }, () =>
+    Math.random().toString(36).slice(2, 10),
+  ).join("");
+  return `install-${Date.now().toString(36)}-${randomPart}`;
+}
+
+export async function getAiInstallationId(): Promise<string> {
+  const existing = await AsyncStorage.getItem(AI_INSTALLATION_ID_KEY);
+  if (existing) return existing;
+
+  const created = createInstallationId();
+  await AsyncStorage.setItem(AI_INSTALLATION_ID_KEY, created);
+  return created;
+}
+
 const usageKey = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -73,13 +92,23 @@ const usageKey = () => {
 };
 
 export async function getAiUsage(): Promise<number> {
-  const raw = await AsyncStorage.getItem(usageKey());
-  return Number(raw ?? "0") || 0;
+  try {
+    const raw = await AsyncStorage.getItem(usageKey());
+    return Number(raw ?? "0") || 0;
+  } catch (error) {
+    captureOperationalError({ category: "STORAGE_READ_FAILURE", operation: "storage", storage: "ai_usage", error });
+    throw error;
+  }
 }
 
 export async function incrementAiUsage(): Promise<number> {
   const next = (await getAiUsage()) + 1;
-  await AsyncStorage.setItem(usageKey(), `${next}`);
+  try {
+    await AsyncStorage.setItem(usageKey(), `${next}`);
+  } catch (error) {
+    captureOperationalError({ category: "STORAGE_WRITE_FAILURE", operation: "storage", storage: "ai_usage", error });
+    throw error;
+  }
   return next;
 }
 
@@ -149,28 +178,44 @@ export async function askAiTutor({
   const timeout = setTimeout(() => controller.abort(), 20000);
 
   try {
+    const installationId = await getAiInstallationId();
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-AI-Installation-ID": installationId,
+      },
       body: JSON.stringify({
         level,
         scenarioId: scenario.id,
-        scenarioTitle: scenario.title,
         messages: messages.slice(-8).map((m) => ({ role: m.role, text: m.text })),
       }),
       signal: controller.signal,
     });
 
     if (!response.ok) {
-      throw new Error(`AI tutor request failed with status ${response.status}`);
+      const error = new Error("AI tutor request failed");
+      if (response.status >= 500 && response.status !== 503) {
+        captureOperationalError({ category: "AI_PROVIDER_FAILURE", operation: "ai_network", error, httpStatus: response.status });
+      }
+      throw error;
     }
 
     const data = await response.json();
     if (!data?.reply || typeof data.reply !== "string") {
-      throw new Error("AI tutor response was missing a reply.");
+      const error = new Error("AI tutor response was invalid");
+      captureOperationalError({ category: "AI_INVALID_RESPONSE", operation: "ai_network", error });
+      throw error;
     }
 
     return { text: data.reply.trim(), source: "remote" as const };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      captureOperationalError({ category: "AI_TIMEOUT", operation: "ai_network", error });
+    } else if (error instanceof TypeError) {
+      captureOperationalError({ category: "AI_NETWORK_FAILURE", operation: "ai_network", error });
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }

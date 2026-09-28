@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,8 +13,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useProgress } from "@/contexts/ProgressContext";
+import { canAccessLevel } from "@/contexts/SubscriptionContext";
 import { LESSONS, type Word } from "@/data/lessons";
 import { useColors } from "@/hooks/useColors";
+import { calculateQuizScore } from "@/lib/quizScoring";
+import { useSubscription } from "@/lib/revenuecat";
 
 interface QuizQuestion {
   word: Word;
@@ -77,7 +81,16 @@ export default function QuizScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { saveQuizScore } = useProgress();
+  const { finishQuiz } = useProgress();
+  const { isPremium, isEntitlementLoading } = useSubscription();
+  const lesson = LESSONS.find((item) => item.id === id);
+  const canAccessQuiz = !lesson || canAccessLevel(isPremium, lesson.level);
+
+  useEffect(() => {
+    if (lesson && !isEntitlementLoading && !canAccessQuiz) {
+      router.replace("/paywall");
+    }
+  }, [canAccessQuiz, isEntitlementLoading, lesson, router]);
 
   const questions = useMemo(() => buildQuestions(id ?? ""), [id]);
   const [current, setCurrent] = useState(0);
@@ -98,7 +111,6 @@ export default function QuizScreen() {
 
       const correct = optionIndex === question.correctIndex;
       if (correct) {
-        setScore((s) => s + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setWrongAnswers((wa) => [...wa, question]);
@@ -109,16 +121,32 @@ export default function QuizScreen() {
   );
 
   const handleNext = useCallback(() => {
-      if (current + 1 >= questions.length) {
-      const finalScore = Math.round((score / questions.length) * 100);
-      saveQuizScore(id ?? "", finalScore);
+    if (selected === null) return;
+
+    const nextScore = score + (selected === question.correctIndex ? 1 : 0);
+
+    if (current + 1 >= questions.length) {
+      const finalScore = calculateQuizScore(nextScore, questions.length);
+      setScore(nextScore);
+      finishQuiz(id ?? "", finalScore);
       setDone(true);
     } else {
+      setScore(nextScore);
       setCurrent((c) => c + 1);
       setSelected(null);
       setAnswered(false);
     }
-  }, [current, questions.length, score, selected, question, saveQuizScore, id]);
+  }, [current, questions.length, score, selected, question, finishQuiz, id]);
+
+  if (isEntitlementLoading || !canAccessQuiz) {
+    return (
+      <View
+        style={[styles.screen, { backgroundColor: colors.background, justifyContent: "center" }]}
+      >
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
 
   if (!question || questions.length === 0) {
     return (
@@ -130,7 +158,7 @@ export default function QuizScreen() {
     );
   }
 
-  const finalScore = Math.round((score / questions.length) * 100);
+  const finalScore = calculateQuizScore(score, questions.length);
 
   if (done) {
     const passed = finalScore >= 60;
@@ -143,6 +171,9 @@ export default function QuizScreen() {
         ]}
       >
         <View
+          accessible
+          accessibilityRole="summary"
+          accessibilityLabel={`Quiz result: ${finalScore} percent, ${score} of ${questions.length} correct. ${passed ? "Passed" : "More review recommended"}.`}
           style={[
             styles.scoreCircle,
             {
@@ -151,10 +182,11 @@ export default function QuizScreen() {
             },
           ]}
         >
-          <Text style={[styles.scorePct, { color: passed ? "#FFFFFF" : colors.foreground }]}>
+          <Text accessible={false} style={[styles.scorePct, { color: passed ? "#FFFFFF" : colors.foreground }]}>
             {finalScore}%
           </Text>
           <Text
+            accessible={false}
             style={[
               styles.scoreLabel,
               { color: passed ? "rgba(255,255,255,0.8)" : colors.mutedForeground },
@@ -164,7 +196,7 @@ export default function QuizScreen() {
           </Text>
         </View>
 
-        <Text style={[styles.doneTitle, { color: colors.foreground }]}>
+        <Text accessibilityRole="header" style={[styles.doneTitle, { color: colors.foreground }]}>
           {finalScore >= 90
             ? "Excellent!"
             : finalScore >= 70
@@ -181,7 +213,7 @@ export default function QuizScreen() {
 
         {wrongAnswers.length > 0 && (
           <View style={styles.reviewSection}>
-            <Text style={[styles.reviewTitle, { color: colors.foreground }]}>
+            <Text accessibilityRole="header" style={[styles.reviewTitle, { color: colors.foreground }]}>
               Review These Words
             </Text>
             {wrongAnswers.map((q) => (
@@ -232,8 +264,10 @@ export default function QuizScreen() {
               setDone(false);
               setWrongAnswers([]);
             }}
+            accessibilityRole="button"
+            accessibilityHint="Restarts this quiz from the first question"
           >
-            <Ionicons name="refresh" size={18} color={colors.foreground} />
+            <Ionicons accessible={false} name="refresh" size={18} color={colors.foreground} />
             <Text style={[styles.retryBtnText, { color: colors.foreground }]}>
               Try Again
             </Text>
@@ -247,6 +281,8 @@ export default function QuizScreen() {
               },
             ]}
             onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityHint="Returns to the lesson"
           >
             <Text
               style={[styles.continueBtnText, { color: colors.primaryForeground }]}
@@ -254,6 +290,7 @@ export default function QuizScreen() {
               Continue
             </Text>
             <Ionicons
+              accessible={false}
               name="arrow-forward"
               size={18}
               color={colors.primaryForeground}
@@ -269,6 +306,15 @@ export default function QuizScreen() {
       {/* Progress */}
       <View style={styles.progressArea}>
         <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Quiz progress"
+          accessibilityValue={{
+            min: 0,
+            max: questions.length,
+            now: current + 1,
+            text: `Question ${current + 1} of ${questions.length}`,
+          }}
           style={[styles.progressTrack, { backgroundColor: colors.secondary }]}
         >
           <View
@@ -278,7 +324,7 @@ export default function QuizScreen() {
             ]}
           />
         </View>
-        <Text style={[styles.qCounter, { color: colors.mutedForeground }]}>
+        <Text accessible={false} style={[styles.qCounter, { color: colors.mutedForeground }]}>
           {current + 1} / {questions.length}
         </Text>
       </View>
@@ -297,7 +343,7 @@ export default function QuizScreen() {
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
-          <Text style={[styles.questionHint, { color: colors.mutedForeground }]}>
+          <Text accessibilityRole="header" style={[styles.questionHint, { color: colors.mutedForeground }]}>
             WHAT DOES THIS MEAN?
           </Text>
           <Text style={[styles.questionWord, { color: colors.foreground }]}>
@@ -316,6 +362,15 @@ export default function QuizScreen() {
             let bgColor = colors.card;
             let borderColor = colors.border;
             let textColor = colors.foreground;
+            const isCorrectAnswer = idx === question.correctIndex;
+            const isSelectedAnswer = idx === selected;
+            const answerResult = answered
+              ? isCorrectAnswer
+                ? "Correct answer"
+                : isSelectedAnswer
+                  ? "Incorrect answer"
+                  : undefined
+              : undefined;
 
             if (answered) {
               if (idx === question.correctIndex) {
@@ -345,6 +400,9 @@ export default function QuizScreen() {
                 ]}
                 onPress={() => handleSelect(idx)}
                 disabled={answered}
+                accessibilityRole="button"
+                accessibilityLabel={`${["A", "B", "C", "D"][idx]}, ${option}${answerResult ? `. ${answerResult}` : ""}`}
+                accessibilityState={{ selected: isSelectedAnswer, disabled: answered }}
               >
                 <View
                   style={[
@@ -370,6 +428,7 @@ export default function QuizScreen() {
                 </Text>
                 {answered && idx === question.correctIndex && (
                   <Ionicons
+                    accessible={false}
                     name="checkmark-circle"
                     size={20}
                     color={colors.success}
@@ -377,6 +436,7 @@ export default function QuizScreen() {
                 )}
                 {answered && idx === selected && idx !== question.correctIndex && (
                   <Ionicons
+                    accessible={false}
                     name="close-circle"
                     size={20}
                     color={colors.destructive}
@@ -386,6 +446,20 @@ export default function QuizScreen() {
             );
           })}
         </View>
+
+        {answered && (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[
+              styles.answerFeedback,
+              { color: selected === question.correctIndex ? colors.success : colors.destructive },
+            ]}
+          >
+            {selected === question.correctIndex
+              ? "Correct."
+              : `Incorrect. Correct answer: ${question.options[question.correctIndex]}.`}
+          </Text>
+        )}
 
         {/* Next Button */}
         {answered && (
@@ -398,11 +472,14 @@ export default function QuizScreen() {
               },
             ]}
             onPress={handleNext}
+            accessibilityRole="button"
+            accessibilityLabel={current + 1 >= questions.length ? "See quiz results" : "Next question"}
           >
             <Text style={[styles.nextBtnText, { color: colors.primaryForeground }]}>
               {current + 1 >= questions.length ? "See Results" : "Next Question"}
             </Text>
             <Ionicons
+              accessible={false}
               name="arrow-forward"
               size={18}
               color={colors.primaryForeground}
@@ -473,6 +550,13 @@ const styles = StyleSheet.create({
   options: {
     gap: 10,
   },
+  answerFeedback: {
+    marginTop: 14,
+    fontSize: 15,
+    lineHeight: 21,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
+  },
   optionBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -517,8 +601,10 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   scoreCircle: {
-    width: 160,
-    height: 160,
+    minWidth: 160,
+    minHeight: 160,
+    maxWidth: "100%",
+    padding: 24,
     borderRadius: 80,
     alignItems: "center",
     justifyContent: "center",
@@ -538,6 +624,8 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.5,
+    maxWidth: "100%",
+    textAlign: "center",
   },
   doneSub: {
     fontSize: 15,
@@ -575,11 +663,14 @@ const styles = StyleSheet.create({
   },
   doneActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
     width: "100%",
   },
   retryBtn: {
     flex: 1,
+    flexBasis: 140,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -588,11 +679,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   retryBtnText: {
+    flexShrink: 1,
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
   },
   continueBtn: {
     flex: 1,
+    flexBasis: 140,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -601,7 +696,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   continueBtnText: {
+    flexShrink: 1,
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
   },
 });

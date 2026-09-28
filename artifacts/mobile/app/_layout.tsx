@@ -17,11 +17,25 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProgressProvider } from "@/contexts/ProgressContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  captureOperationalError,
+  createErrorBoundaryReporter,
+  initializeObservability,
+} from "@/lib/observability";
 import { SubscriptionProvider } from "@/lib/revenuecat";
 
-SplashScreen.preventAutoHideAsync();
+initializeObservability();
+
+void SplashScreen.preventAutoHideAsync().catch((error) => {
+  captureOperationalError({
+    category: "STARTUP_FAILURE",
+    operation: "startup",
+    error,
+  });
+});
 
 const queryClient = new QueryClient();
+const reportRenderError = createErrorBoundaryReporter();
 
 function RootLayoutNav() {
   const colors = useColors();
@@ -85,7 +99,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      void SplashScreen.hideAsync().catch((error) => {
+        captureOperationalError({
+          category: "STARTUP_FAILURE",
+          operation: "startup",
+          error,
+        });
+      });
     }
   }, [fontsLoaded, fontError]);
 
@@ -94,7 +114,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <ErrorBoundary>
+        <ErrorBoundary onError={reportRenderError}>
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
