@@ -72,6 +72,56 @@ const ERROR_CATEGORIES = new Set<MobileErrorCategory>([
 const OPERATIONS = new Set<OperationCategory>(["billing", "entitlement", "storage", "ai_network", "startup", "rendering"]);
 const STORAGE_CATEGORIES = new Set<StorageCategory>(["progress", "theme", "ai_usage"]);
 
+// Explicit snapshot of PURCHASES_ERROR_CODE from installed RevenueCat types 18.10.0.
+// Independent of the native SDK so reporting also works during initialization.
+const BILLING_ERROR_CODES = new Map<string, string>([
+  ["0", "UNKNOWN_ERROR"],
+  ["1", "PURCHASE_CANCELLED_ERROR"],
+  ["2", "STORE_PROBLEM_ERROR"],
+  ["3", "PURCHASE_NOT_ALLOWED_ERROR"],
+  ["4", "PURCHASE_INVALID_ERROR"],
+  ["5", "PRODUCT_NOT_AVAILABLE_FOR_PURCHASE_ERROR"],
+  ["6", "PRODUCT_ALREADY_PURCHASED_ERROR"],
+  ["7", "RECEIPT_ALREADY_IN_USE_ERROR"],
+  ["8", "INVALID_RECEIPT_ERROR"],
+  ["9", "MISSING_RECEIPT_FILE_ERROR"],
+  ["10", "NETWORK_ERROR"],
+  ["11", "INVALID_CREDENTIALS_ERROR"],
+  ["12", "UNEXPECTED_BACKEND_RESPONSE_ERROR"],
+  ["13", "RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER_ERROR"],
+  ["14", "INVALID_APP_USER_ID_ERROR"],
+  ["15", "OPERATION_ALREADY_IN_PROGRESS_ERROR"],
+  ["16", "UNKNOWN_BACKEND_ERROR"],
+  ["17", "INVALID_APPLE_SUBSCRIPTION_KEY_ERROR"],
+  ["18", "INELIGIBLE_ERROR"],
+  ["19", "INSUFFICIENT_PERMISSIONS_ERROR"],
+  ["20", "PAYMENT_PENDING_ERROR"],
+  ["21", "INVALID_SUBSCRIBER_ATTRIBUTES_ERROR"],
+  ["22", "LOG_OUT_ANONYMOUS_USER_ERROR"],
+  ["23", "CONFIGURATION_ERROR"],
+  ["24", "UNSUPPORTED_ERROR"],
+  ["25", "EMPTY_SUBSCRIBER_ATTRIBUTES_ERROR"],
+  ["26", "PRODUCT_DISCOUNT_MISSING_IDENTIFIER_ERROR"],
+  ["28", "PRODUCT_DISCOUNT_MISSING_SUBSCRIPTION_GROUP_IDENTIFIER_ERROR"],
+  ["29", "CUSTOMER_INFO_ERROR"],
+  ["30", "SYSTEM_INFO_ERROR"],
+  ["31", "BEGIN_REFUND_REQUEST_ERROR"],
+  ["32", "PRODUCT_REQUEST_TIMED_OUT_ERROR"],
+  ["33", "API_ENDPOINT_BLOCKED"],
+  ["34", "INVALID_PROMOTIONAL_OFFER_ERROR"],
+  ["35", "OFFLINE_CONNECTION_ERROR"],
+  ["42", "TEST_STORE_SIMULATED_PURCHASE_ERROR"],
+]);
+const BILLING_ERROR_NAMES = new Set(BILLING_ERROR_CODES.values());
+
+function safeBillingErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  // Do not invoke arbitrary getters while extracting diagnostics.
+  const descriptor = Object.getOwnPropertyDescriptor(error, "code");
+  const code: unknown = descriptor?.value;
+  return typeof code === "string" ? BILLING_ERROR_CODES.get(code) : undefined;
+}
+
 function safeErrorClass(error: unknown): string {
   if (error instanceof Error && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(error.name)) {
     return error.name;
@@ -141,6 +191,11 @@ export function sanitizeEventForReporting(event: ReporterEvent): ReporterEvent {
   if (typeof operation === "string" && OPERATIONS.has(operation as OperationCategory)) safeTags.operation = operation;
   if (typeof storage === "string" && STORAGE_CATEGORIES.has(storage as StorageCategory)) safeTags.storage = storage;
   if (typeof httpStatusClass === "string" && /^[1-5]xx$/.test(httpStatusClass)) safeTags.http_status_class = httpStatusClass;
+  const billingCode = event.tags?.billing_error_code;
+  if (safeTags.operation === "billing" && safeTags.error_category?.startsWith("BILLING_") &&
+      typeof billingCode === "string" && BILLING_ERROR_NAMES.has(billingCode)) {
+    safeTags.billing_error_code = billingCode;
+  }
   event.tags = safeTags;
 
   const diagnostic = event.contexts?.diagnostic;
@@ -231,6 +286,10 @@ export function captureOperationalError({
       error_category: category,
       operation,
     };
+    if (operation === "billing" && category.startsWith("BILLING_")) {
+      const billingCode = safeBillingErrorCode(error);
+      if (billingCode) tags.billing_error_code = billingCode;
+    }
     if (storage) tags.storage = storage;
     const httpStatusClass = statusClass(httpStatus);
     if (httpStatusClass) tags.http_status_class = httpStatusClass;
